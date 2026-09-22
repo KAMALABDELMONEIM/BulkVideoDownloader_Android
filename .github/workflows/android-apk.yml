@@ -112,9 +112,17 @@ jobs:
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
-          unset ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME
           export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
-          buildozer -v android debug
+          env -u ANDROID_NDK -u ANDROID_NDK_HOME -u ANDROID_NDK_ROOT -u ANDROID_NDK_LATEST_HOME \
+            buildozer -v android debug 2>&1 | tee buildozer-build.log
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-build-log
+          path: ${{ env.PROJECT_DIR }}/buildozer-build.log
+          if-no-files-found: warn
 
       - name: Show APK output
         run: |
