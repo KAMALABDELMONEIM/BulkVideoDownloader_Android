@@ -11,8 +11,8 @@ orientation = portrait
 fullscreen = 0
 android.archs = arm64-v8a
 android.minapi = 23
-android.api = 35
-android.ndk = 27c
+android.api = 34
+android.ndk = 25b
 android.permissions = INTERNET,WAKE_LOCK
 p4a.branch = master
 
