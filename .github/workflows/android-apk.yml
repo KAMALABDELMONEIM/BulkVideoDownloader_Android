@@ -1,0 +1,109 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "**/*.py"
+      - "buildozer.spec"
+      - "requirements-desktop.txt"
+      - "README.md"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    paths:
+      - "**/*.py"
+      - "buildozer.spec"
+      - "requirements-desktop.txt"
+      - "README.md"
+      - ".github/workflows/android-apk.yml"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install Ubuntu build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            python3-pip \
+            python3-venv \
+            build-essential \
+            libffi-dev \
+            libssl-dev \
+            zlib1g-dev \
+            liblzma-dev \
+            pkg-config
+
+      - name: Locate project root
+        run: |
+          if [ -f buildozer.spec ]; then
+            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+          elif [ -f BulkVideoDownloader_Android/buildozer.spec ]; then
+            echo "PROJECT_DIR=BulkVideoDownloader_Android" >> "$GITHUB_ENV"
+          else
+            echo "buildozer.spec not found in repo root or BulkVideoDownloader_Android/."
+            find . -maxdepth 2 -name buildozer.spec -print
+            exit 1
+          fi
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install requests yt-dlp certifi
+
+      - name: Verify Python modules
+        run: |
+          cd "$PROJECT_DIR"
+          python -m py_compile main.py downloader.py ffmpeg_manager.py
+          python tests_smoke.py
+
+      - name: Cache Buildozer and Gradle data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('**/buildozer.spec', '**/*.py', '**/requirements-desktop.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-
+
+      - name: Install Buildozer
+        run: |
+          python -m pip install cython==0.29.36 buildozer
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          buildozer -v android debug
+
+      - name: Show APK output
+        run: |
+          find "$PROJECT_DIR/bin" -maxdepth 1 -type f -name '*.apk' -print -ls
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bulk-video-downloader-apk
+          path: |
+            ${{ env.PROJECT_DIR }}/bin/*.apk
+          if-no-files-found: error
+
