@@ -77,7 +77,10 @@ jobs:
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
-          export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+          export JAVA_HOME="${JAVA_HOME_17_X64:-/usr/lib/jvm/java-17-openjdk-amd64}"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          java -version
+          javac -version
           set -o pipefail
           unset ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME
           buildozer -v android debug 2>&1 | tee buildozer-build.log
