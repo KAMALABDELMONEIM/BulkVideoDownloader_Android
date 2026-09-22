@@ -112,6 +112,8 @@ jobs:
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
+          unset ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME
+          export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
           buildozer -v android debug
 
       - name: Show APK output
