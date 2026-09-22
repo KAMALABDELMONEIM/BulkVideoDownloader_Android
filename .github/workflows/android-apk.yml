@@ -71,6 +71,7 @@ jobs:
       - name: Remove stale Android build state
         run: |
           rm -rf ~/.buildozer/android/platform/android-ndk-r25b
+          rm -rf ~/.buildozer/android/platform/android-ndk-r27c
           rm -rf ~/.buildozer/android/platform/build-arm64-v8a
 
       - name: Prepare Android SDK
