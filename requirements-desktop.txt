@@ -1,3 +1,4 @@
 kivy
 requests
 yt-dlp
+certifi

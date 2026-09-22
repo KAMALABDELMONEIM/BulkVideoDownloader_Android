@@ -7,102 +7,81 @@ on:
     paths:
       - '**/*.py'
       - 'buildozer.spec'
-      - 'requirements-desktop.txt'
       - '.github/workflows/android-apk.yml'
   pull_request:
     paths:
       - '**/*.py'
       - 'buildozer.spec'
-      - 'requirements-desktop.txt'
       - '.github/workflows/android-apk.yml'
 
 jobs:
   build-apk:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 150
 
     steps:
-      - name: Check out source
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: '3.11'
           cache: pip
-          cache-dependency-path: requirements-desktop.txt
 
-      - name: Install Linux dependencies
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk \
-            python3-pip python3-venv build-essential \
-            autoconf automake libtool pkg-config \
-            libffi-dev libssl-dev zlib1g-dev liblzma-dev \
-            cmake lbzip2 ccache
+            git zip unzip openjdk-17-jdk python3-pip python3-venv \
+            build-essential autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libffi-dev libssl-dev liblzma-dev cmake automake
 
-      - name: Locate project root
+      - name: Remove runner Android variables that can override Buildozer
         run: |
-          if [ -f buildozer.spec ]; then
-            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
-          elif [ -f BulkVideoDownloader_Android/buildozer.spec ]; then
-            echo "PROJECT_DIR=BulkVideoDownloader_Android" >> "$GITHUB_ENV"
-          else
-            echo 'buildozer.spec not found'
-            find . -maxdepth 3 -name buildozer.spec -print
-            exit 1
-          fi
+          echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> "$GITHUB_ENV"
+          for var in ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME ANDROIDSDK ANDROIDNDK ANDROIDAPI ANDROIDMINAPI; do
+            echo "$var=" >> "$GITHUB_ENV"
+          done
+
+      - name: Install Buildozer toolchain
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install buildozer==1.5.0 cython==0.29.36
 
       - name: Verify source
         run: |
-          cd "$PROJECT_DIR"
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install requests certifi yt-dlp
           python -m py_compile main.py downloader.py android_storage.py ffmpeg_manager.py
           python tests_smoke.py
 
-      - name: Install Buildozer
+      - name: Clear stale Android build state
         run: |
-          python -m pip install 'cython==0.29.36' 'buildozer==1.5.0'
-          buildozer --version
+          rm -rf .buildozer
+          rm -rf ~/.buildozer/android/platform/build-*
+          rm -rf ~/.buildozer/android/platform/python-for-android
 
-      # Do not restore stale Android platform state from previous toolchains.
-      - name: Remove stale Android build state
+      - name: Build debug APK
         run: |
-          rm -rf ~/.buildozer/android/platform/android-ndk-r25b
-          rm -rf ~/.buildozer/android/platform/android-ndk-r28c
-          rm -rf ~/.buildozer/android/platform/android-ndk-r27c
-          rm -rf ~/.buildozer/android/platform/build-arm64-v8a
-
-      - name: Build APK
-        run: |
-          cd "$PROJECT_DIR"
-          export JAVA_HOME="${JAVA_HOME_17_X64:-/usr/lib/jvm/java-17-openjdk-amd64}"
-          export PATH="$JAVA_HOME/bin:$PATH"
-          java -version
-          javac -version
-          set -o pipefail
-          unset ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK_LATEST_HOME
           buildozer -v android debug 2>&1 | tee buildozer-build.log
 
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildozer-build-log
-          path: ${{ env.PROJECT_DIR }}/buildozer-build.log
-          if-no-files-found: warn
-
       - name: Show APK output
+        if: success()
         run: |
-          find "$PROJECT_DIR/bin" -maxdepth 1 -type f -name '*.apk' -print -ls
+          find bin -maxdepth 1 -type f -name '*.apk' -print -ls
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: bulk-video-downloader-apk
-          path: |
-            ${{ env.PROJECT_DIR }}/bin/*.apk
+          path: bin/*.apk
           if-no-files-found: error
 
+      - name: Upload full Buildozer log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-build-log
+          path: buildozer-build.log
+          if-no-files-found: warn

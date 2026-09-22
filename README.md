@@ -1,103 +1,52 @@
-# Bulk Video Downloader — Android 1.0.0
+# Bulk Video Downloader — Android 1.0
 
-A Kivy + yt-dlp Android app for reading a webpage, finding individual video pages, selecting them, and downloading them in parallel.
+A Kivy + yt-dlp bulk downloader designed for Android. It can accept:
 
-## What this version does
+- a listing/page URL and discover video links;
+- a direct video URL;
+- multiple video URLs pasted one per line.
 
-1. Paste a webpage URL.
-2. Read the page.
-3. Find individual video-page links.
-4. Select the videos you want.
-5. Download them in parallel.
-6. Keep each batch in its own folder.
-7. Save the source links in `video_links.txt`.
+## Important Android storage fix
 
-The Android version deliberately does **not** include Telegram code or desktop-only dependencies.
-
-## Important
-
-This project is source code, not an APK. Build it once to create the APK, then install that APK on your phone.
-
-## Build an APK with GitHub Actions
-
-The easiest way to get a ready-to-install APK is to push this project to GitHub and let the workflow build it for you.
-
-1. Create a GitHub repository for this project.
-2. Push the files.
-3. Open the **Actions** tab.
-4. Run **Build Android APK**.
-5. Download the `bulk-video-downloader-apk` artifact when the job finishes.
-
-The workflow lives in `.github/workflows/android-apk.yml` and uploads the APK automatically.
-
-## Optional local build with WSL Ubuntu
-
-> Note: the desktop/Kivy environment is best installed with Python 3.12 or 3.13.
-> This workspace currently has Python 3.14, which may not have a compatible Kivy wheel yet.
-> For APK builds, GitHub Actions is the recommended path.
-
-Install WSL2 + Ubuntu, then inside the project directory:
-
-```bash
-sudo apt update
-sudo apt install -y git zip unzip openjdk-17-jdk python3-pip python3-venv build-essential libffi-dev libssl-dev
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install --upgrade buildozer cython
-./build_android.sh
-```
-
-If you prefer to launch the local build from Windows PowerShell, use:
-
-```powershell
-Set-Location C:\Users\m6322\PyCharmMiscProject\BulkVideoDownloader_Android
-.\build_android.ps1
-```
-
-The APK will be in `bin/` locally or in the GitHub Actions artifact.
-
-For a clean local rebuild, run:
-
-```powershell
-.\build_android.ps1 -Clean
-```
-
-## Install on Android
-
-Copy the generated APK to your phone, open it, allow Android to install it if prompted, and launch **Bulk Video Downloader**.
-
-## Storage
-
-Downloads are stored inside the app's private storage under:
+Older versions saved downloads under Kivy's private `user_data_dir`, which is why videos could appear to be "missing" from the phone's normal Downloads folder. This version downloads into a temporary app-specific staging directory and then publishes each completed file into:
 
 ```text
-Android app storage/files/downloads/
+Download/Bulk Video Downloader/Batch_YYYYMMDD_HHMMSS/
 ```
 
-This is intentional for Android compatibility. A later version can add a user-selectable public Downloads folder.
+On Android 10+ this uses `MediaStore.Downloads`, so the finished file is in shared storage and remains after uninstall. On Android 9 and older it uses the public Downloads directory after requesting the legacy storage permission.
 
-## Supported page discovery
+Android's scoped-storage model recommends shared storage/MediaStore for user files that should be visible outside the app. urlAndroid shared storage documentationhttps://developer.android.com/training/data-storage/shared/media
 
-The built-in page scanner recognizes links shaped like:
+## Reliability changes
 
-```text
-/videos/123/example/
-/video/123/example/
-```
+The downloader now:
 
-If a site generates links only after JavaScript runs, the simple page scanner may not see them. yt-dlp is used as a fallback where supported.
+- removes the hard requirement for `/videos/<number>/...` URLs;
+- detects common video/watch/clip/reel/media/episode URLs and direct media URLs;
+- uses yt-dlp as a second discovery layer;
+- supports multiple pasted URLs;
+- retries extraction, file access and media fragments;
+- uses a browser-like User-Agent plus Referer/Origin when available;
+- tries multiple format strategies when the first one fails;
+- prefers single-file MP4 when a separate audio/video merge is unavailable;
+- resumes partial downloads when possible;
+- limits concurrent workers to reduce server throttling;
+- writes `video_links.txt` and `results.json` for each batch;
+- reports failures individually instead of hiding them in a single status line.
 
-## Android-safe download behavior
+yt-dlp recommends FFmpeg/ffprobe for merging separate video and audio streams. This Android build therefore includes the FFmpeg recipe. urlyt-dlp documentationhttps://github.com/yt-dlp/yt-dlp
 
-The default format is:
+## Build with GitHub Actions
 
-```text
-best[ext=mp4]/best
-```
+1. Push this folder to GitHub.
+2. Open **Actions → Build Android APK**.
+3. Click **Run workflow**.
+4. Download the `bulk-video-downloader-apk` artifact.
+5. Install the APK on your phone.
 
-This avoids making FFmpeg a mandatory Android dependency. The optional thumbnail feature uses FFmpeg only when an FFmpeg binary is available.
+If a build fails, the workflow uploads a `buildozer-build-log` artifact containing the complete log.
 
-## Legal / site restrictions
+## Limits
 
-Only download media that you have permission to download and that the source site permits you to download. Respect copyright, authentication, robots/terms, and access controls.
+This app does not bypass DRM, paywalls, private access controls, or site authentication. Some websites intentionally block automated clients; those may still require an authenticated cookies file or another supported access method.

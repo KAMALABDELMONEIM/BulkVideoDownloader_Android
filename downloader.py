@@ -91,15 +91,6 @@ def _is_probable_video_page(url: str) -> bool:
     return False
 
 
-def _is_video_page(url: str) -> bool:
-    """Backward-compatible name used by the smoke tests and older callers."""
-    try:
-        path = urlparse(url).path.rstrip("/").lower()
-    except Exception:
-        return False
-    return bool(re.search(r"/(?:videos?|video)/\d+(?:/|$)", path))
-
-
 def _dedupe_key(url: str) -> str:
     return url.split("#", 1)[0].rstrip("/")
 
