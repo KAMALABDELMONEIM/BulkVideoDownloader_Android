@@ -17,12 +17,13 @@ from kivy.uix.textinput import TextInput
 
 from downloader import (
     VideoCandidate,
-    DownloadResult,
     download_batch,
-    extract_video_page_links,
+    extract_candidates,
+    is_direct_media_url,
     make_batch_dir,
     read_webpage,
 )
+from android_storage import public_location, publish_file, staging_root
 from ffmpeg_manager import check_ffmpeg, make_jpeg_thumbnail
 
 
@@ -268,7 +269,7 @@ class DownloaderRoot(BoxLayout):
 
         def work():
             try:
-                candidates = extract_video_page_links(page_url, progress=self.log)
+                candidates = extract_candidates(page_url, progress=self.log)
 
                 def apply(_dt):
                     self.candidates = candidates
@@ -302,11 +303,16 @@ class DownloaderRoot(BoxLayout):
         except ValueError:
             workers = 2
 
-        batch_root = Path(self.app_ref.user_data_dir) / "downloads"
+        batch_root = staging_root()
         batch_dir = make_batch_dir(batch_root)
         self.app_ref.last_batch = batch_dir
         urls = [c.url for c in selected]
-        self.log(f"Batch started: {batch_dir.name}\n{len(urls)} video(s).")
+        batch_name = batch_dir.name
+        self.log(
+            f"Batch started: {batch_name}\n"
+            f"{len(urls)} video(s)\n"
+            f"Destination: {public_location(batch_name)}"
+        )
 
         def work():
             results = download_batch(
@@ -319,11 +325,35 @@ class DownloaderRoot(BoxLayout):
                 thumbnail_func=make_jpeg_thumbnail,
                 progress=self.log,
             )
-            ok = sum(1 for r in results if r.ok)
-            failed = len(results) - ok
+            ok = 0
+            failed = 0
+            for result in results:
+                if not result.ok:
+                    failed += 1
+                    continue
+                try:
+                    publish_file(Path(result.filepath), batch_name)
+                    thumbnail = Path(result.filepath).with_name(
+                        Path(result.filepath).stem + ".preview.jpg"
+                    )
+                    if thumbnail.exists():
+                        publish_file(thumbnail, batch_name, "image/jpeg")
+                    ok += 1
+                except Exception as exc:
+                    failed += 1
+                    self.log(f"Save failed: {exc}")
+
+            for filename, mime_type in (("video_links.txt", "text/plain"), ("results.json", "application/json")):
+                metadata = batch_dir / filename
+                if metadata.exists():
+                    try:
+                        publish_file(metadata, batch_name, mime_type)
+                    except Exception:
+                        pass
+
             self.log(
-                f"Batch finished: {ok} downloaded, {failed} failed.\n"
-                f"Folder: {batch_dir}"
+                f"Batch finished: {ok} saved, {failed} failed.\n"
+                f"Folder: {public_location(batch_name)}"
             )
 
         threading.Thread(target=work, daemon=True).start()

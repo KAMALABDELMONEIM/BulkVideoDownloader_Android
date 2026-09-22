@@ -59,7 +59,7 @@ jobs:
           cd "$PROJECT_DIR"
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install requests certifi yt-dlp
-          python -m py_compile main.py downloader.py ffmpeg_manager.py
+          python -m py_compile main.py downloader.py android_storage.py ffmpeg_manager.py
           python tests_smoke.py
 
       - name: Install Buildozer
